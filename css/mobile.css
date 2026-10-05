@@ -217,3 +217,27 @@ button:disabled.btn-white, .co-pay button:disabled { opacity: .5; }
   .tb-badge span { display: none; }
   .tb-badge { padding: 6px 8px; }
 }
+
+/* ---------- calculator display (qty@price preview + added amounts) ---------- */
+.qs-top { min-height: 96px; }
+.qs-display { text-align: right; align-self: stretch; display: flex; flex-direction: column; justify-content: space-between; }
+.qs-hist { color: var(--p); font-weight: 600; font-size: 1.05rem; word-break: break-word; min-height: 1.4em; }
+.qs-expr { font-size: 1.05rem; font-weight: 500; color: var(--bs-secondary-color); }
+.qs-expr.dim { opacity: 0; }
+
+/* ---------- amount collected dialog ---------- */
+.modal-header.collect-head { background: var(--p); color: #fff; justify-content: center; border: 0; border-radius: 0; }
+.modal-header.collect-head .btn-close { display: none; }
+.modal-dialog:has(.collect) .modal-content { border-radius: 4px; overflow: visible; }
+.modal-dialog:has(.collect) .modal-body { padding: 0; background: var(--app-bg); }
+.collect-in { display: flex; align-items: center; justify-content: space-between; background: var(--app-bg); padding: 14px 16px; border-bottom: 1px solid var(--bs-border-color); }
+.collect-in .amt { font-size: 1.7rem; font-weight: 500; color: var(--p); } .collect-in .amt.dim { color: var(--bs-secondary-color); opacity: .6; }
+.ck-c { background: #e0707c; color: #fff; border: 0; width: 44px; height: 44px; border-radius: 4px; font-weight: 600; }
+.collect-ret { text-align: center; padding: 14px 0 10px; color: var(--bs-secondary-color); font-size: 1.15rem; }
+.collect-ret b { display: block; color: var(--bs-body-color); font-weight: 500; min-height: 1.6em; margin-top: 8px; }
+.collect-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 4px 16px 14px; }
+.collect-keys button { height: 60px; border: 0; background: var(--surface); color: var(--p); font-size: 1.2rem; box-shadow: 0 2px 3px rgba(0, 0, 0, .18); border-radius: 2px; }
+.collect-keys button:active { background: #e6e6e6; }
+.collect-bill { width: 100%; border: 0; background: var(--green); color: #fff; font-size: 1.35rem; font-weight: 600; padding: 16px; }
+.collect-chk { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface); color: var(--bs-secondary-color); font-size: .95rem; }
+.collect-x { position: absolute; left: 50%; bottom: -76px; transform: translateX(-50%); background: none; border: 0; color: #fff; font-size: 3.4rem; line-height: 1; }

@@ -108,7 +108,7 @@ function buildChrome() {
 
 function showHelp() {
   const steps = [
-    ['calculator', 'Sales tab', 'Type the price (or <b>50@100</b> for price 50 × quantity 100) and tap <b>Add Item</b>. Tap <b>Cash In</b> when you are done.'],
+    ['calculator', 'Sales tab', 'Type the price (or <b>10@120</b> for quantity 10 at price 120) and tap <b>Add Item</b>. Tap <b>Cash In</b> when you are done.'],
     ['cash-stack', 'Take payment', 'Choose <b>Cash</b>, <b>Udhar</b> (credit to a customer) or <b>More</b> for bank, wallet and part payments.'],
     ['printer', 'Receipt', 'Print on a Bluetooth printer, or share the receipt by WhatsApp or SMS.'],
     ['bookmark', 'Save for later', 'Tap the bookmark or <b>Save For Later</b> to park a sale and continue it from the Saved tab.'],

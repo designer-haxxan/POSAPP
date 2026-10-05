@@ -105,7 +105,7 @@ const actions = {
       body: `<div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="taxEnabled" id="cs-tax" ${s.taxEnabled ? 'checked' : ''}><label class="form-check-label" for="cs-tax">Add tax to every sale automatically</label></div>
         <label class="form-label">Default tax rate (%)</label><input name="taxRate" class="form-control mb-3" inputmode="decimal" value="${s.taxRate}">
         <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" name="allowNegativeStock" id="cs-neg" ${s.allowNegativeStock ? 'checked' : ''}><label class="form-check-label" for="cs-neg">Allow selling products when stock is short</label></div>
-        <div class="form-text">Tip: type <b>50@100</b> on the keypad for price 50 × quantity 100.</div>`,
+        <div class="form-text">Tip: type <b>10@120</b> on the keypad for quantity 10 at price 120.</div>`,
       onSubmit: (v) => { const n = num(v.taxRate); if (n < 0 || n > 100) throw new AppError('Tax rate must be between 0 and 100.'); return { taxEnabled: !!v.taxEnabled, taxRate: n, allowNegativeStock: !!v.allowNegativeStock }; },
     });
     if (r) { saveSettings(r); UI.toast('Calculator settings saved'); }

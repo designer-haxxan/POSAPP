@@ -22,7 +22,7 @@ Four bottom tabs, purple mobile layout (capped at 520 px wide on desktop):
 | Tab | What it does |
 |---|---|
 | **Reports** | Total sales, profit, expenses, top items, other income, payment modes, tax and discount for a day / week / month / year / custom range. Filter by payment mode. |
-| **Sales** | Calculator keypad. Type a price, or `50@100` for price × quantity, then **Add Item**. **Cash In** opens checkout. Tabs for today's sales and carts saved for later. Barcode scan and product picker included. |
+| **Sales** | Calculator keypad. Type a price, or `10@120` for quantity 10 at price 120, then **Add Item**. **Cash In** opens checkout. Tabs for today's sales and carts saved for later. Barcode scan and product picker included. |
 | **Cashflow** | Other income and expenses (with categories), purchases, search (voice search where supported) and a date range. |
 | **More** | Business profile, receipt prefix, receipt/calculator/printer settings, inventory, customers (Udhar), suppliers, stock, payment accounts, backup, detailed reports, vibration and sound switches. |
 

@@ -141,6 +141,56 @@ async function complete({ accountId = 'cash', tendered, customerId }) {
   } catch (e) { UI.toastError(e); } finally { busy = false; }
 }
 
+// "Enter Amount Collected" keypad. Resolves with the amount collected, or null if closed.
+function collectCash(total) {
+  return new Promise((resolve) => {
+    let entered = ''; let result = null;
+    const counter = pref.get('balanceCounter', true);
+    const m = UI.modal({
+      title: 'Enter Amount Collected', size: 'sm', fullscreenMobile: false, scrollable: false,
+      body: `<div class="collect">
+        <div class="collect-in"><span class="amt"></span><button class="ck-c" data-k="C">C</button></div>
+        <div class="collect-ret"><div>Amount to return:</div><b class="ret">-</b></div>
+        <div class="collect-keys">${['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00'].map((k) => `<button data-k="${k}">${k}</button>`).join('')}</div>
+        <button class="collect-bill">Bill: ${esc(cur())}${fmtNum(total)}</button>
+        <label class="collect-chk"><input type="checkbox" class="form-check-input" ${counter ? 'checked' : ''}> Balance Counter Enabled</label></div>`,
+    });
+    const $m = m.$el;
+    const paint = () => {
+      $m.find('.amt').text(entered || '0.0').toggleClass('dim', !entered);
+      const n = num(entered);
+      $m.find('.ret').text(entered && n >= total ? `${cur()}${fmtNum(n - total)}` : '-');
+    };
+    $m.on('click', '[data-k]', function () {
+      const k = this.dataset.k;
+      if (navigator.vibrate && pref.get('vibrate', true)) navigator.vibrate(10);
+      if (k === 'C') entered = '';
+      else if (k === '.') { if (!entered.includes('.')) entered += entered ? '.' : '0.'; }
+      else if (entered.length < 12) entered += k;
+      paint();
+    });
+    $m.on('change', '.collect-chk input', function () { pref.set('balanceCounter', this.checked); });
+    $m.on('click', '.collect-bill', () => {
+      const n = entered ? round2(num(entered)) : total;
+      if (n < total) { UI.toast(`Amount is less than the bill (${cur()}${fmtNum(total)}). Use Udhar for credit.`, 'warning', 2800); return; }
+      result = n; m.close();
+    });
+    // The round close button below the dialog, as in the reference app.
+    const $x = $('<button class="collect-x" aria-label="Close"><i class="bi bi-x-circle"></i></button>').appendTo($m.find('.modal-dialog'));
+    $x.on('click', () => m.close());
+    $m.find('.modal-header').addClass('collect-head');
+    m.closed.then(() => resolve(result));
+    paint();
+  });
+}
+
+async function payCash() {
+  const t = Cart.totals();
+  if (!pref.get('balanceCounter', true)) return complete({ accountId: 'cash' });
+  const n = await collectCash(t.total);
+  if (n !== null) complete({ accountId: 'cash', tendered: n });
+}
+
 async function payUdhar() {
   const p = await partyPicker('customers', {});
   if (!p) return;
@@ -282,7 +332,7 @@ export default {
     });
     $root.on('click', '[data-pay]', function () {
       const k = this.dataset.pay;
-      if (k === 'cash') complete({ accountId: 'cash' }); else if (k === 'udhar') payUdhar(); else payMore();
+      if (k === 'cash') payCash(); else if (k === 'udhar') payUdhar(); else payMore();
     });
   },
   destroy() { $root?.off(); $root = null; },

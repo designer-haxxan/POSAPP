@@ -58,10 +58,10 @@ export function evaluate(s) {
   return i === t.length && Number.isFinite(v) ? round2(v) : null;
 }
 
-// "50@100" → price 50 × quantity 100. Anything else is a single item at that amount.
+// "10@120" → quantity 10 at price 120. Anything else is a single item at that amount.
 function parseItem(s) {
   const m = /^(\d*\.?\d+)@(\d*\.?\d+)$/.exec(s);
-  if (m && Number(m[1]) > 0 && Number(m[2]) > 0) return { rate: Number(m[1]), qty: Number(m[2]) };
+  if (m && Number(m[1]) > 0 && Number(m[2]) > 0) return { qty: Number(m[1]), rate: Number(m[2]) };
   const v = evaluate(s);
   return v !== null && v > 0 ? { rate: v, qty: 1 } : null;
 }
@@ -89,7 +89,7 @@ function layout() {
   return `<div class="qs">
     <div class="qs-top">
       <button class="btn-ico" data-act="scan" aria-label="Scan barcode"><i class="bi bi-upc-scan"></i></button>
-      <div class="qs-display"><div class="qs-expr"></div><div class="qs-sub"></div></div>
+      <div class="qs-display"><div class="qs-hist"></div><div class="qs-expr"></div></div>
       <button class="btn-ico filled" data-act="save" aria-label="Save for later"><i class="bi bi-bookmark-fill"></i></button>
     </div>
     <div class="seg" role="tablist">
@@ -101,13 +101,19 @@ function layout() {
 
 function pending() { return expr ? evaluate(expr) : null; }
 
+// Preview of the item being typed, e.g. "Item 2 : Rs10×120" (quantity × price) or "Item 2 : Rs120".
+function previewText() {
+  if (!expr) return '';
+  const it = parseItem(expr);
+  const shown = it && expr.includes('@') ? `${fmtQty(it.qty)}×${fmtNum(it.rate).replace(/\.00$/, '')}` : (pending() !== null && /[+−×÷%]/.test(expr) ? fmtNum(pending()).replace(/\.00$/, '') : expr.replace(/@/g, '×'));
+  return `Item ${Cart.count() + 1} : ${cur()}${shown}`;
+}
+
 function renderDisplay() {
-  const v = pending();
-  const shown = expr || '';
-  $root.find('.qs-expr').text(shown || '0').toggleClass('dim', !shown);
-  $root.find('.qs-sub').html(expr && v !== null && /[+−×÷@%]/.test(expr) ? `= ${fmtNum(v)}${expr.includes('@') ? ` <span class="text-body-secondary">(rate @ qty)</span>` : ''}` : (Cart.count() ? `${Cart.count()} item(s) in cart` : '&nbsp;'));
-  const total = Cart.totals().subtotal + (parseItem(expr) ? round2(parseItem(expr).rate * parseItem(expr).qty) : 0);
-  $root.find('.ck-cash').text(`Cash In: ${cur()}${fmtNum(total)}`);
+  const amounts = Cart.get().lines.map((l) => fmtNum(round2(l.qty * l.rate - (l.discount || 0))).replace(/\.00$/, ''));
+  $root.find('.qs-hist').text(amounts.length ? amounts.join(' | ') + ' |' : '');
+  $root.find('.qs-expr').text(previewText()).toggleClass('dim', !expr);
+  $root.find('.ck-cash').text(`Cash In: ${cur()}${fmtNum(Cart.totals().subtotal)}`);
 }
 
 async function renderSales() {
