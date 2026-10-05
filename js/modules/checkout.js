@@ -10,6 +10,7 @@ import * as Catalog from '../services/catalog.js';
 import * as Posting from '../services/posting.js';
 import * as Cart from '../services/cart.js';
 import * as Printer from '../printer/printer.js';
+import { fmtInvoiceDate, trim0, fmtTotalQty } from '../printer/receipt.js';
 import { partyPicker } from './parties.js';
 
 const $ = window.jQuery;
@@ -276,14 +277,14 @@ async function receiptScreen(id, isNew) {
       <div class="rc-name">${esc(s.business.name)}</div>
       ${s.business.phone ? `<div class="rc-phone">${esc(s.business.phone)}</div>` : ''}
       <div class="rc-title">Invoice</div>
-      <div class="rc-meta"><b>Receipt# ${esc(doc.number)}</b><b>${esc(fmtDateTime(doc.createdAt))}</b></div>
+      <div class="rc-meta"><b>Receipt# ${esc(doc.number)}</b><b>${esc(fmtInvoiceDate(doc.createdAt, doc.date))}</b></div>
       ${doc.customerId || doc.customerPhone || (doc.customerName && doc.customerName !== 'Walk-in Customer') ? `<div class="rc-cust">Customer: ${esc(doc.customerName)}${doc.customerPhone ? ` · ${esc(doc.customerPhone)}` : ''}</div>` : ''}
       <div class="dash"></div>
       <div class="rc-grid head"><span>Name</span><span>Qty</span><span>Price</span><span class="r">Total</span></div>
       <div class="dash"></div>
-      ${list.map((i) => `<div class="rc-grid"><span class="nm">${esc(i.name)}</span><span>${esc(fmtQty(i.qty))}</span><span>${fmtNum(i.rate)}</span><span class="r">${fmtNum(i.amount)}</span></div>`).join('')}
+      ${list.map((i) => `<div class="rc-grid"><span class="nm">${esc(i.name)}</span><span>${esc(fmtQty(i.qty))}</span><span>${trim0(i.rate)}</span><span class="r">${trim0(i.amount)}</span></div>`).join('')}
       <div class="dash"></div>
-      <div class="rc-sub"><div><div>Items: ${list.length}</div><div>Total Qty: ${esc(fmtQty(doc.qtyTotal))}</div></div><b>Subtotal</b><b>${c}${fmtNum(doc.subtotal)}</b></div>
+      <div class="rc-sub"><div><div>Items: ${list.length}</div><div>Total Qty: ${esc(fmtTotalQty(doc.qtyTotal))}</div></div><b>Subtotal</b><b>${c}${fmtNum(doc.subtotal)}</b></div>
       ${doc.discount ? `<div class="rc-kv"><span>Discount</span><span>-${c}${fmtNum(doc.discount)}</span></div>` : ''}
       ${doc.tax ? `<div class="rc-kv"><span>Tax (${doc.taxRate}%)</span><span>${c}${fmtNum(doc.tax)}</span></div>` : ''}
       <div class="dash"></div>

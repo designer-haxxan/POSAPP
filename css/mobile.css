@@ -247,3 +247,8 @@ button:disabled.btn-white, .co-pay button:disabled { opacity: .5; }
 .rc-cust { text-align: left; margin: 8px 0 2px; font-size: .95rem; }
 
 .collect-ret b.udhar { color: #b45309; }
+.rc-meta { font-size: .8rem; flex-wrap: nowrap; white-space: nowrap; }
+.rc-sub { grid-template-columns: 1.7fr 1fr 1.3fr; font-size: .95rem; }
+.rc-sub > div { white-space: nowrap; }
+.rc-grid { padding: 12px 0; }
+.rc-grand { font-size: clamp(1.15rem, 5.4vw, 1.7rem); white-space: nowrap; }

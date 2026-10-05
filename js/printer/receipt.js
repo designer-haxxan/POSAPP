@@ -1,9 +1,21 @@
 // Builds a printer-independent receipt model and renders it to ESC/POS bytes or HTML.
 import * as idb from '../db/idb.js';
+import { CONFIG } from '../config.js';
 import { getSettings } from '../core/settings.js';
 import { fmtNum, fmtQty, fmtDateTime, fmtDate, esc, localDate } from '../core/utils.js';
 import { EscPos, isPlain } from './escpos.js';
 import * as Raster from './raster.js';
+
+// "04 Oct 2026 - 3:37 PM"
+export function fmtInvoiceDate(iso, fallbackDate = '') {
+  const d = iso ? new Date(iso) : new Date(fallbackDate + 'T00:00:00');
+  const day = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = iso ? d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '';
+  return time ? `${day} - ${time}` : day;
+}
+// Invoice figures drop a trailing ".00" (1,200 not 1,200.00); totals keep two decimals.
+export const trim0 = (n) => fmtNum(n).replace(/\.00$/, '');
+export const fmtTotalQty = (n) => (Number.isInteger(Number(n)) ? Number(n).toFixed(1) : fmtQty(n));
 
 const TITLES = { sale: 'SALES RECEIPT', purchase: 'PURCHASE', saleReturn: 'SALE RETURN', purchaseReturn: 'PURCHASE RETURN', receipt: 'PAYMENT RECEIPT', payment: 'PAYMENT VOUCHER', transfer: 'TRANSFER' };
 
@@ -23,6 +35,14 @@ export async function buildReceipt(kind, doc) {
     m.info.push([kind === 'sale' ? 'Customer' : 'Supplier', kind === 'sale' ? doc.customerName : doc.supplierName]);
     if (kind === 'sale' && doc.customerPhone) m.info.push(['Phone', doc.customerPhone]);
     m.items = list.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit, rate: i.rate, discount: i.discount, amount: i.amount }));
+    if (kind === 'sale') {
+      const who = doc.customerId || doc.customerPhone || (doc.customerName && doc.customerName !== 'Walk-in Customer');
+      m.invoice = {
+        number: doc.number, when: fmtInvoiceDate(doc.createdAt, doc.date), qtyTotal: doc.qtyTotal, subtotal: doc.subtotal, discount: doc.discount, tax: doc.tax, taxRate: doc.taxRate,
+        total: doc.total, paid: doc.paid, balance: doc.balance, customer: who ? [doc.customerName, doc.customerPhone].filter(Boolean).join(' · ') : '',
+        mode: doc.paymentType === 'credit' ? 'Udhar' : (doc.paymentAccountId === 'cash' ? 'Cash' : doc.paymentAccountName) + (doc.paymentType === 'partial' ? ' + Udhar' : ''),
+      };
+    }
     m.totals.push(['Subtotal', doc.subtotal]);
     if (doc.discount) m.totals.push(['Discount', -doc.discount]);
     if (doc.tax) m.totals.push([`Tax (${doc.taxRate}%)`, doc.tax]);
@@ -50,7 +70,42 @@ export async function buildReceipt(kind, doc) {
 }
 
 // Async because Urdu/non-Latin lines are rendered with the Jameel Noori Nastaleeq web font.
+async function invoiceEscPos(m, width) {
+  await Raster.ensureFont();
+  const p = new EscPos(width, Raster, { imageMode: getSettings().printer.imageMode });
+  const cur = getSettings().currency; const v = m.invoice;
+  const W = p.cols; const wQty = W > 40 ? 7 : 5; const wPrice = W > 40 ? 9 : 6; const wTot = W > 40 ? 12 : 9; const wName = W - wQty - wPrice - wTot;
+  const cell = (s, w, right = true) => { s = String(s); return right ? s.padStart(w).slice(-w) : s.padEnd(w).slice(0, w); };
+  const row = (name, q, pr, tot) => cell(name, wName, false) + cell(q, wQty) + cell(pr, wPrice) + cell(tot, wTot);
+  p.align('center');
+  m.header.forEach((h, i) => { if (i === 0) p.bold(true).size(true).wrap(h, Math.floor(W / 2)).size(false).bold(false); else p.wrap(h); });
+  p.feed(1).bold(true).line('Invoice').bold(false).align('left');
+  p.lr('Receipt# ' + v.number, '');
+  p.line(v.when);
+  if (v.customer) p.lr('Customer:', v.customer);
+  p.hr().line(row('Name', 'Qty', 'Price', 'Total')).hr();
+  m.items.forEach((i) => {
+    const long = !isPlain(i.name) || i.name.length > wName - 1;
+    if (long) { p.wrap(i.name); p.line(row('', fmtQty(i.qty), trim0(i.rate), trim0(i.amount))); } else p.line(row(i.name, fmtQty(i.qty), trim0(i.rate), trim0(i.amount)));
+    if (i.discount) p.lr('  Discount', '-' + trim0(i.discount));
+  });
+  p.hr();
+  p.lr(`Items: ${m.items.length}`, `Subtotal  ${cur}${fmtNum(v.subtotal)}`);
+  p.line(`Total Qty: ${fmtTotalQty(v.qtyTotal)}`);
+  if (v.discount) p.lr('Discount', `-${cur}${fmtNum(v.discount)}`);
+  if (v.tax) p.lr(`Tax (${v.taxRate}%)`, `${cur}${fmtNum(v.tax)}`);
+  p.hr().align('center').bold(true).size(true).wrap(`Grand Total ${cur}${fmtNum(v.total)}`, Math.floor(W / 2)).size(false).bold(false).align('left').hr();
+  p.align('center').line(`Payment Mode: ${v.mode}`);
+  if (v.balance) { p.align('left').lr('Paid', `${cur}${fmtNum(v.paid)}`); p.bold(true).lr('Balance due', `${cur}${fmtNum(v.balance)}`).bold(false); }
+  if (m.note) { p.align('left').wrap('Note: ' + m.note); }
+  p.align('center').feed(1);
+  if (m.footer) p.wrap(m.footer);
+  p.line(`Powered by ${CONFIG.APP_NAME}`).feed(3).cut();
+  return p.bytes();
+}
+
 export async function toEscPos(m, width = 58) {
+  if (m.invoice) return invoiceEscPos(m, width);
   await Raster.ensureFont();
   const p = new EscPos(width, Raster, { imageMode: getSettings().printer.imageMode });
   const cur = getSettings().currency;
@@ -81,7 +136,26 @@ export async function toEscPos(m, width = 58) {
 // Urdu/RTL text is wrapped so it uses Jameel Noori Nastaleeq and right-to-left layout.
 const t = (s) => (isPlain(s) ? esc(s) : `<span class="ur" dir="auto">${esc(s)}</span>`);
 
+function invoiceHTML(m, width) {
+  const cur = esc(getSettings().currency); const v = m.invoice;
+  const kv = (l, r, cls = '') => `<tr class="${cls}"><td>${l}</td><td class="r">${r}</td></tr>`;
+  return `<div class="receipt w${Number(width) === 80 ? 80 : 58}">
+    ${m.header.map((h, i) => `<div class="c ${i === 0 ? 'b big' : ''}">${t(h)}</div>`).join('')}
+    <div class="c b" style="margin-top:6px">Invoice</div>
+    <table><tr><td class="b">Receipt# ${esc(v.number)}</td></tr><tr><td>${esc(v.when)}</td></tr>${v.customer ? `<tr><td>Customer: ${t(v.customer)}</td></tr>` : ''}</table>
+    <hr><table class="inv"><tr class="b"><td>Name</td><td class="r">Qty</td><td class="r">Price</td><td class="r">Total</td></tr></table><hr>
+    <table class="inv">${m.items.map((i) => `<tr><td>${t(i.name)}</td><td class="r">${fmtQty(i.qty)}</td><td class="r">${trim0(i.rate)}</td><td class="r">${trim0(i.amount)}</td></tr>${i.discount ? `<tr><td colspan="3">&nbsp;&nbsp;Discount</td><td class="r">-${trim0(i.discount)}</td></tr>` : ''}`).join('')}</table>
+    <hr><table>${kv(`Items: ${m.items.length}`, `<b>Subtotal ${cur}${fmtNum(v.subtotal)}</b>`)}${kv(`Total Qty: ${fmtTotalQty(v.qtyTotal)}`, '')}
+    ${v.discount ? kv('Discount', `-${cur}${fmtNum(v.discount)}`) : ''}${v.tax ? kv(`Tax (${v.taxRate}%)`, `${cur}${fmtNum(v.tax)}`) : ''}</table>
+    <hr><div class="c b big">Grand Total ${cur}${fmtNum(v.total)}</div><hr>
+    <div class="c">Payment Mode: ${t(v.mode)}</div>
+    ${v.balance ? `<table>${kv('Paid', `${cur}${fmtNum(v.paid)}`)}${kv('Balance due', `${cur}${fmtNum(v.balance)}`, 'b')}</table>` : ''}
+    ${m.note ? `<div>Note: ${t(m.note)}</div>` : ''}
+    <div class="c" style="margin-top:8px">${m.footer ? t(m.footer) : ''}</div><div class="c">Powered by ${esc(CONFIG.APP_NAME)}</div></div>`;
+}
+
 export function toHTML(m, width = 58) {
+  if (m.invoice) return invoiceHTML(m, width);
   const cur = esc(getSettings().currency);
   const row = (l, r, cls = '') => `<tr class="${cls}"><td>${l}</td><td class="r">${r}</td></tr>`;
   return `<div class="receipt w${Number(width) === 80 ? 80 : 58}">
