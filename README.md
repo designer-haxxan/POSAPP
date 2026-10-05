@@ -15,6 +15,19 @@ HTML5 · ES modules · jQuery · Bootstrap 5 · Bootstrap Icons · IndexedDB · 
 - **Backup & restore**: versioned JSON with checksum, validation preview, replace or merge.
 - **PWA**: installable, works fully offline after the first online login.
 
+## Screens (v1.4)
+
+Four bottom tabs, purple mobile layout (capped at 520 px wide on desktop):
+
+| Tab | What it does |
+|---|---|
+| **Reports** | Total sales, profit, expenses, top items, other income, payment modes, tax and discount for a day / week / month / year / custom range. Filter by payment mode. |
+| **Sales** | Calculator keypad. Type a price, or `50@100` for price × quantity, then **Add Item**. **Cash In** opens checkout. Tabs for today's sales and carts saved for later. Barcode scan and product picker included. |
+| **Cashflow** | Other income and expenses (with categories), purchases, search (voice search where supported) and a date range. |
+| **More** | Business profile, receipt prefix, receipt/calculator/printer settings, inventory, customers (Udhar), suppliers, stock, payment accounts, backup, detailed reports, vibration and sound switches. |
+
+Checkout has tax, discount, **Cash**, **Udhar** (credit to a customer) and **More** (bank/wallet accounts, part payment). The receipt screen prints, or shares by WhatsApp, SMS or the share sheet. Calculator items that are not in the product list are saved as custom lines (no stock, no cost). The older full-featured screens are still available from **More**.
+
 ## Architecture
 
 ```

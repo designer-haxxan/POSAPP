@@ -172,6 +172,12 @@ export async function saveSale(input) {
     await t.put('sales', doc);
     let i = 0;
     for (const l of calc.lines) {
+      if (!l.productId) {
+        // Custom (calculator) line: not in the catalogue, so no stock movement and no cost.
+        await t.add('saleItems', { id: uuid(), saleId: id, saleNo: number, date: doc.date, line: i++, productId: null, name: clean(l.name, 120) || 'Item', sku: '', unit: '',
+          qty: l.qty, rate: l.rate, discount: l.discount, amount: l.amount, cost: 0 });
+        continue;
+      }
       const p = await t.get('products', l.productId);
       if (!p) throw new AppError('A product in the cart no longer exists.');
       if (!p.active && !editing) throw new AppError(`"${p.name}" is inactive.`);
@@ -325,6 +331,7 @@ export async function saveReturn(kind, input) {
     };
     await t.add(retStore, doc);
     for (const l of lines) {
+      if (!l.productId) continue; // custom calculator line: no stock to restore
       await moveStock(t, ctx, { productId: l.productId, qty: isSale ? l.qty : -l.qty, type: isSale ? 'sale_return' : 'purchase_return', doc, cost: l.cost });
     }
     if (partyId) ctx.parties.push([partyStore, partyId]);

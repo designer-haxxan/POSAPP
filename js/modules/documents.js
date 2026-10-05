@@ -25,7 +25,7 @@ async function renderList(el, kind) {
   const k = K[kind];
   const $el = $(el);
   let from = today(); let to = today();
-  const newBtn = kind === 'sale' ? (Auth.can('sale.create') ? '<a class="btn btn-primary btn-sm" href="#/pos"><i class="bi bi-plus-lg"></i> New sale</a>' : '')
+  const newBtn = kind === 'sale' ? (Auth.can('sale.create') ? '<a class="btn btn-primary btn-sm" href="#/sell"><i class="bi bi-plus-lg"></i> New sale</a>' : '')
     : '<a class="btn btn-primary btn-sm" href="#/purchase/new"><i class="bi bi-plus-lg"></i> New purchase</a>';
   $el.html(UI.pageHeader(kind === 'sale' ? 'Sales' : 'Purchases', newBtn) + dateFilter(from, to, `<div class="flex-grow-2"><label class="form-label small mb-0">Search</label><input type="search" name="q" class="form-control form-control-sm" placeholder="Number or ${kind === 'sale' ? 'customer' : 'supplier'}"></div>
       <div><label class="form-label small mb-0">Status</label><select name="status" class="form-select form-select-sm"><option value="">All</option><option value="due">Unpaid / partial</option><option value="void">Void</option></select></div>`) + `

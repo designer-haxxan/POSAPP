@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS = {
   updatePurchasePrice: true,
   prefixes: { sale: 'SALE', purchase: 'PUR', saleReturn: 'SRN', purchaseReturn: 'PRN', receipt: 'RCV', payment: 'PAY', transfer: 'TRF', adjustment: 'ADJ' },
   printer: { method: 'browser', width: 58, autoPrint: false, copies: 1, chunkSize: 20, imageMode: 'gsv0', deviceName: '', deviceId: '' },
-  theme: 'auto',
+  theme: 'light',
   register: 'Main',
 };
 

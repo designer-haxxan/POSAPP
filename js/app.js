@@ -1,6 +1,6 @@
 // Application bootstrap: service worker, database, authentication gate, navigation and routing.
 import { CONFIG } from './config.js';
-import { applyTheme, getSettings } from './core/settings.js';
+import { applyTheme } from './core/settings.js';
 import * as UI from './core/ui.js';
 import { esc } from './core/utils.js';
 import { openDB } from './db/idb.js';
@@ -9,24 +9,34 @@ import * as Catalog from './services/catalog.js';
 
 const $ = window.jQuery;
 
-// Route table: name → [loader, title, permission|null, icon, menu section]
+// Route table: name → [loader, title, permission|null]
 const ROUTES = {
-  dashboard: [() => import('./modules/dashboard.js'), 'Dashboard', null, 'house', 'Main'],
-  pos: [() => import('./modules/pos.js'), 'New Sale', 'sale.create', 'cart-plus', 'Main'],
-  sales: [() => import('./modules/documents.js'), 'Sales', null, 'receipt', 'Main'],
-  purchase: [() => import('./modules/pos.js'), 'New Purchase', 'purchase.manage', null, null],
-  purchases: [() => import('./modules/documents.js'), 'Purchases', 'purchase.manage', 'bag', 'Main'],
-  returns: [() => import('./modules/documents.js'), 'Returns', null, 'arrow-return-left', 'Main'],
-  products: [() => import('./modules/products.js'), 'Products', null, 'box-seam', 'Inventory'],
-  stock: [() => import('./modules/stock.js'), 'Stock', null, 'boxes', 'Inventory'],
-  customers: [() => import('./modules/parties.js'), 'Customers', null, 'people', 'Parties'],
-  suppliers: [() => import('./modules/parties.js'), 'Suppliers', 'purchase.manage', 'truck', 'Parties'],
-  vouchers: [() => import('./modules/vouchers.js'), 'Cash Book & Payments', 'voucher.create', 'cash-coin', 'Accounts'],
-  accounts: [() => import('./modules/accounts.js'), 'Accounts', 'account.manage', 'bank', 'Accounts'],
-  reports: [() => import('./reports/reports.js'), 'Reports', 'reports.view', 'bar-chart-line', 'Accounts'],
-  backup: [() => import('./modules/backup.js'), 'Backup & Restore', 'backup.export', 'cloud-arrow-down', 'Administration'],
-  settings: [() => import('./modules/settings.js'), 'Settings', null, 'gear', 'Administration'],
+  sell: [() => import('./modules/sell.js'), 'Sales', null],
+  cart: [() => import('./modules/checkout.js'), 'Checkout', 'sale.create'],
+  receipt: [() => import('./modules/checkout.js'), 'Receipt', null],
+  summary: [() => import('./modules/summary.js'), 'Reports', null],
+  cashflow: [() => import('./modules/cashflow.js'), 'Cashflow', null],
+  more: [() => import('./modules/more.js'), 'More', null],
+  dashboard: [() => import('./modules/dashboard.js'), 'Business hub', null],
+  pos: [() => import('./modules/pos.js'), 'Sell from products', 'sale.create'],
+  sales: [() => import('./modules/documents.js'), 'Sales', null],
+  purchase: [() => import('./modules/pos.js'), 'New Purchase', 'purchase.manage'],
+  purchases: [() => import('./modules/documents.js'), 'Purchases', 'purchase.manage'],
+  returns: [() => import('./modules/documents.js'), 'Returns', null],
+  products: [() => import('./modules/products.js'), 'Products', null],
+  stock: [() => import('./modules/stock.js'), 'Stock', null],
+  customers: [() => import('./modules/parties.js'), 'Customers', null],
+  suppliers: [() => import('./modules/parties.js'), 'Suppliers', 'purchase.manage'],
+  vouchers: [() => import('./modules/vouchers.js'), 'Cash Book & Payments', 'voucher.create'],
+  accounts: [() => import('./modules/accounts.js'), 'Payment Settings', 'account.manage'],
+  reports: [() => import('./reports/reports.js'), 'Detailed Reports', 'reports.view'],
+  backup: [() => import('./modules/backup.js'), 'Backup & Restore', 'backup.export'],
+  settings: [() => import('./modules/settings.js'), 'Settings', null],
 };
+const DEFAULT_ROUTE = 'sell';
+// Bottom-nav tabs get the purple tool bar; cart/receipt are full-screen; pos/purchase hide the bottom nav.
+const TABS = new Set(['sell', 'summary', 'cashflow', 'more']);
+const BARE_ROUTES = new Set(['cart', 'receipt']);
 const FOCUS_ROUTES = new Set(['pos', 'purchase']);
 
 let currentModule = null;
@@ -70,13 +80,13 @@ function registerSW() {
   });
 }
 
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; $('#install-btn').removeClass('d-none'); });
-window.addEventListener('appinstalled', () => { deferredInstall = null; $('#install-btn').addClass('d-none'); UI.toast('App installed'); });
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredInstall = e; });
+window.addEventListener('appinstalled', () => { deferredInstall = null; UI.toast('App installed'); });
 export async function promptInstall() {
   if (!deferredInstall) return false;
   deferredInstall.prompt();
   await deferredInstall.userChoice;
-  deferredInstall = null; $('#install-btn').addClass('d-none');
+  deferredInstall = null;
   return true;
 }
 export const canInstall = () => !!deferredInstall;
@@ -92,35 +102,38 @@ window.addEventListener('online', () => renderConn('online'));
 window.addEventListener('offline', () => renderConn('offline'));
 
 // ---------- Navigation ----------
-function buildMenu() {
-  let html = ''; let section = '';
-  for (const [name, [, title, perm, icon, sec]] of Object.entries(ROUTES)) {
-    if (!sec || (perm && !Auth.can(perm))) continue;
-    if (sec !== section) { section = sec; html += `<div class="nav-section">${esc(sec)}</div>`; }
-    html += `<a class="nav-link" href="#/${name}" data-route="${name}"><i class="bi bi-${icon}"></i>${esc(title)}</a>`;
-  }
-  $('.nav-menu').html(html);
-  const u = Auth.user();
-  $('#user-name').text(u.name);
-  $('#user-role').text(Auth.ROLES[u.role] || u.role);
-  $('#user-avatar').text(UI.initials(u.name));
-  $('#brand-name').text(getSettings().business.name || CONFIG.APP_NAME);
-  $('#bottom-nav [data-route="pos"]').toggleClass('d-none', !Auth.can('sale.create'));
+function buildChrome() {
+  $('#tb-support').attr('href', `https://wa.me/${String(CONFIG.SUPPORT_PHONE).replace(/\D/g, '').replace(/^0/, '92')}`);
+}
+
+function showHelp() {
+  const steps = [
+    ['calculator', 'Sales tab', 'Type the price (or <b>50@100</b> for price 50 × quantity 100) and tap <b>Add Item</b>. Tap <b>Cash In</b> when you are done.'],
+    ['cash-stack', 'Take payment', 'Choose <b>Cash</b>, <b>Udhar</b> (credit to a customer) or <b>More</b> for bank, wallet and part payments.'],
+    ['printer', 'Receipt', 'Print on a Bluetooth printer, or share the receipt by WhatsApp or SMS.'],
+    ['bookmark', 'Save for later', 'Tap the bookmark or <b>Save For Later</b> to park a sale and continue it from the Saved tab.'],
+    ['bar-chart-fill', 'Reports', 'See sales, profit, expenses, payment modes, tax and discounts for any day, week, month or year.'],
+    ['arrow-left-right', 'Cashflow', 'Record other income and expenses, and open purchases.'],
+  ];
+  UI.modal({ title: 'How to use the app', size: 'md', body: steps.map(([i, t, d]) => `<div class="help-step"><i class="bi bi-${i}"></i><div><div class="fw-semibold">${t}</div><div class="small text-body-secondary">${d}</div></div></div>`).join('') });
 }
 
 async function route() {
   if (!Auth.user()) return;
   if (checkExpiry()) return;
   const token = ++routeToken;
-  const parts = (location.hash.replace(/^#\/?/, '') || 'dashboard').split('/').map(decodeURIComponent);
-  const name = ROUTES[parts[0]] ? parts[0] : 'dashboard';
+  const parts = (location.hash.replace(/^#\/?/, '') || DEFAULT_ROUTE).split('/').map(decodeURIComponent);
+  const name = ROUTES[parts[0]] ? parts[0] : DEFAULT_ROUTE;
   const [loader, title, perm] = ROUTES[name];
   try { currentModule?.destroy?.(); } catch (e) { console.warn(e); }
   currentModule = null;
-  bootstrap.Offcanvas.getInstance('#menu-offcanvas')?.hide();
-  $('.nav-menu .nav-link, #bottom-nav a').removeClass('active');
-  $(`.nav-menu [data-route="${name}"], #bottom-nav [data-route="${name}"]`).addClass('active');
-  $('body').toggleClass('focus-mode', FOCUS_ROUTES.has(name));
+  const tab = TABS.has(name);
+  const bare = BARE_ROUTES.has(name);
+  $('#bottom-nav a').removeClass('active');
+  $(`#bottom-nav [data-tab="${tab ? name : 'more'}"]`).addClass('active');
+  $('#topbar').toggleClass('d-none', !tab);
+  $('#subbar').toggleClass('d-none', tab || bare);
+  $('body').toggleClass('focus-mode', FOCUS_ROUTES.has(name) || bare).toggleClass('tab-screen', tab).toggleClass('bare-screen', bare);
   $('#topbar-title').text(title);
   const $c = $('#content').off();
   if (perm && !Auth.can(perm)) { $c.html(UI.emptyState('You do not have permission to open this page.', 'shield-lock')); return; }
@@ -142,7 +155,7 @@ async function route() {
 // ---------- Auth gate ----------
 async function startApp() {
   await Catalog.load();
-  buildMenu();
+  buildChrome();
   showView('app');
   renderConn(navigator.onLine ? 'online' : 'offline');
   clearInterval(expiryTimer);
@@ -197,11 +210,18 @@ $('#toggle-pw').on('click', () => {
   $i.attr('type', show ? 'text' : 'password');
   $('#toggle-pw i').attr('class', show ? 'bi bi-eye-slash' : 'bi bi-eye');
 });
-$('#logout-btn').on('click', () => doLogout(false));
-$('#install-btn').on('click', promptInstall);
+$('#tb-help').on('click', showHelp);
+$('#sub-back').on('click', () => { if (history.length > 1) history.back(); else location.hash = '#/more'; });
+$('#topbar').on('click', '[data-go]', function () { location.hash = this.dataset.go; });
+$('#tb-share').on('click', async () => {
+  const url = location.href.split('#')[0];
+  if (navigator.share) { try { await navigator.share({ title: CONFIG.APP_NAME, text: `${CONFIG.APP_NAME}: simple point of sale that works offline`, url }); } catch { /* cancelled */ } }
+  else { try { await navigator.clipboard.writeText(url); UI.toast('App link copied'); } catch { UI.toast(url, 'info', 6000); } }
+});
 window.addEventListener('hashchange', route);
-document.addEventListener('settings:changed', () => { applyTheme(); if (Auth.user()) $('#brand-name').text(getSettings().business.name || CONFIG.APP_NAME); });
-document.addEventListener('auth:changed', () => { if (Auth.user()) buildMenu(); });
+document.addEventListener('settings:changed', applyTheme);
+document.addEventListener('app:logout', () => doLogout(false));
+document.addEventListener('app:install', async () => { if (!await promptInstall()) UI.toast('Use your browser menu: Install app / Add to Home screen.', 'info', 5000); });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 // ---------- Boot ----------
