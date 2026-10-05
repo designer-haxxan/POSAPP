@@ -170,7 +170,7 @@ function collectCash(total) {
       title: 'Enter Amount Collected', size: 'sm', fullscreenMobile: false, scrollable: false,
       body: `<div class="collect">
         <div class="collect-in"><span class="amt"></span><button class="ck-c" data-k="C">C</button></div>
-        <div class="collect-ret"><div>Amount to return:</div><b class="ret">-</b></div>
+        <div class="collect-ret"><div class="ret-l">Amount to return:</div><b class="ret">-</b></div>
         <div class="collect-keys">${['7', '8', '9', '4', '5', '6', '1', '2', '3', '.', '0', '00'].map((k) => `<button data-k="${k}">${k}</button>`).join('')}</div>
         <button class="collect-bill">Bill: ${esc(cur())}${fmtNum(total)}</button>
         <label class="collect-chk"><input type="checkbox" class="form-check-input" ${counter ? 'checked' : ''}> Balance Counter Enabled</label></div>`,
@@ -179,7 +179,9 @@ function collectCash(total) {
     const paint = () => {
       $m.find('.amt').text(entered || '0.0').toggleClass('dim', !entered);
       const n = num(entered);
-      $m.find('.ret').text(entered && n >= total ? `${cur()}${fmtNum(n - total)}` : '-');
+      const short = entered && n < total;
+      $m.find('.ret-l').text(short ? 'Balance to Udhar (credit):' : 'Amount to return:');
+      $m.find('.ret').text(!entered ? '-' : short ? `${cur()}${fmtNum(total - n)}` : `${cur()}${fmtNum(n - total)}`).toggleClass('udhar', !!short);
     };
     $m.on('click', '[data-k]', function () {
       const k = this.dataset.k;
@@ -191,9 +193,7 @@ function collectCash(total) {
     });
     $m.on('change', '.collect-chk input', function () { pref.set('balanceCounter', this.checked); });
     $m.on('click', '.collect-bill', () => {
-      const n = entered ? round2(num(entered)) : total;
-      if (n < total) { UI.toast(`Amount is less than the bill (${cur()}${fmtNum(total)}). Use Udhar for credit.`, 'warning', 2800); return; }
-      result = n; m.close();
+      result = entered ? round2(num(entered)) : total; m.close();
     });
     // The round close button below the dialog, as in the reference app.
     const $x = $('<button class="collect-x" aria-label="Close"><i class="bi bi-x-circle"></i></button>').appendTo($m.find('.modal-dialog'));
@@ -208,7 +208,14 @@ async function payCash() {
   const t = Cart.totals();
   if (!pref.get('balanceCounter', true)) return complete({ accountId: 'cash' });
   const n = await collectCash(t.total);
-  if (n !== null) complete({ accountId: 'cash', tendered: n });
+  if (n === null) return;
+  if (n >= t.total) return complete({ accountId: 'cash', tendered: n });
+  // Paid less than the bill: the rest goes to the customer's account (Udhar).
+  const st = Cart.get();
+  let party = st.partyId ? { id: st.partyId, name: st.partyName } : await partyPicker('customers', {});
+  if (!party) return;
+  Cart.set({ partyId: party.id, partyName: party.name });
+  complete({ accountId: 'cash', tendered: n, customerId: party.id });
 }
 
 async function payUdhar() {
@@ -283,6 +290,7 @@ async function receiptScreen(id, isNew) {
       <div class="rc-grand">Grand Total ${c}${fmtNum(doc.total)}</div>
       <div class="dash"></div>
       <div class="rc-pay">Payment Mode: &nbsp;${esc(mode)}</div>
+      ${doc.balance ? `<div class="rc-kv"><span>Paid</span><span>${c}${fmtNum(doc.paid)}</span></div>` : ''}
       ${doc.balance ? `<div class="rc-pay due">Balance due (${esc(doc.customerName)}): ${c}${fmtNum(doc.balance)}</div>` : ''}
       <div class="rc-foot">${esc(s.business.footer || 'Thank You, Visit Again')}</div>
       <div class="rc-powered">Powered by ${esc(CONFIG.APP_NAME)}</div>
