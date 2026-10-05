@@ -6,7 +6,7 @@ import * as Posting from './posting.js';
 
 const KEY = storageKey('draft.quick');
 
-const fresh = () => ({ id: uuid(), date: today(), lines: [], discountType: 'amt', discountValue: 0, taxRate: null, partyId: null, partyName: '', note: '' });
+const fresh = () => ({ id: uuid(), date: today(), lines: [], discountType: 'amt', discountValue: 0, taxRate: null, partyId: null, partyName: '', custName: '', custPhone: '', note: '' });
 
 let st = (() => {
   try { const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (d && Array.isArray(d.lines)) return { ...fresh(), ...d }; } catch { /* ignore */ }
@@ -75,5 +75,6 @@ export function saleInput({ tendered, paymentAccountId = 'cash', customerId = st
   return {
     id: st.id, date: st.date, items: st.lines, discount: t.discount, taxRate: t.taxRate,
     tendered, paymentAccountId, customerId: customerId || null, note: st.note || '',
+    customerName: st.custName || '', customerPhone: st.custPhone || '',
   };
 }

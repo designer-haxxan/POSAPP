@@ -241,3 +241,7 @@ button:disabled.btn-white, .co-pay button:disabled { opacity: .5; }
 .collect-bill { width: 100%; border: 0; background: var(--green); color: #fff; font-size: 1.35rem; font-weight: 600; padding: 16px; }
 .collect-chk { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--surface); color: var(--bs-secondary-color); font-size: .95rem; }
 .collect-x { position: absolute; left: 50%; bottom: -76px; transform: translateX(-50%); background: none; border: 0; color: #fff; font-size: 3.4rem; line-height: 1; }
+
+.co-cust { display: flex; align-items: center; gap: 10px; width: calc(100% - 16px); margin: 0 8px; padding: 12px 16px; border: 0; border-top: 1px solid var(--bs-border-color-translucent); background: var(--surface); color: var(--bs-secondary-color); text-align: left; }
+.co-cust > i:first-child { color: var(--p); font-size: 1.3rem; } .co-cust .co-cust-t { flex: 1; } .co-cust .co-cust-t.set { color: var(--bs-body-color); font-weight: 500; } .co-cust > i:last-child { color: var(--p); }
+.rc-cust { text-align: left; margin: 8px 0 2px; font-size: .95rem; }

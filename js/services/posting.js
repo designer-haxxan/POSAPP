@@ -151,18 +151,20 @@ export async function saveSale(input) {
       await revertDoc(t, ctx, id);
       await t.deleteByIndex('saleItems', 'saleId', id);
     }
-    let customerName = 'Walk-in Customer';
+    // Walk-in sales may carry an optional name/phone typed at checkout (no customer record is created).
+    let customerName = clean(input.customerName, 120) || 'Walk-in Customer';
+    let customerPhone = clean(input.customerPhone, 30);
     if (customerId) {
       const c = await t.get('customers', customerId);
       if (!c) throw new AppError('Customer not found.');
-      customerName = c.name; ctx.parties.push(['customers', customerId]);
+      customerName = c.name; customerPhone = c.phone || customerPhone; ctx.parties.push(['customers', customerId]);
     }
     const acc = await paymentAccount(t, input.paymentAccountId);
     const number = existing?.number || await nextNumber(t, 'sale');
     const now = nowISO();
     const doc = {
       id, number, date: input.date || existing?.date || today(), createdAt: existing?.createdAt || now, updatedAt: now,
-      customerId, customerName, itemCount: calc.lines.length, qtyTotal: calc.qtyTotal,
+      customerId, customerName, customerPhone, itemCount: calc.lines.length, qtyTotal: calc.qtyTotal,
       subtotal: calc.subtotal, discount: calc.discount, taxRate: calc.taxRate, tax: calc.tax, total: calc.total,
       tendered, paid, change: round2(Math.max(0, tendered - calc.total)), balance: round2(calc.total - paid),
       paymentAccountId: acc.id, paymentAccountName: acc.name,

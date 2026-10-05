@@ -21,6 +21,7 @@ export async function buildReceipt(kind, doc) {
     const list = items.length ? items : (doc.voidedItems || []);
     list.sort((a, b) => a.line - b.line);
     m.info.push([kind === 'sale' ? 'Customer' : 'Supplier', kind === 'sale' ? doc.customerName : doc.supplierName]);
+    if (kind === 'sale' && doc.customerPhone) m.info.push(['Phone', doc.customerPhone]);
     m.items = list.map((i) => ({ name: i.name, qty: i.qty, unit: i.unit, rate: i.rate, discount: i.discount, amount: i.amount }));
     m.totals.push(['Subtotal', doc.subtotal]);
     if (doc.discount) m.totals.push(['Discount', -doc.discount]);

@@ -35,6 +35,7 @@ function checkoutLayout() {
       <div class="co-top-total"></div>
     </header>
     <div class="co-lines"></div>
+    <button class="co-cust" data-act="cust"><i class="bi bi-person-plus"></i><span class="co-cust-t"></span><i class="bi bi-chevron-right"></i></button>
     <div class="co-sum">
       <div class="row-kv"><span>Subtotal</span><span class="v-sub"></span></div>
       <div class="d-flex gap-2 my-2">
@@ -68,6 +69,8 @@ function renderCheckout() {
       <div class="min-w-0"><div class="n text-truncate">${esc(l.name)}</div><div class="m">${c}${fmtNum(l.rate)} &nbsp;x${esc(fmtQty(l.qty))}${l.discount ? ` · disc ${fmtNum(l.discount)}` : ''}</div></div>
       <div class="a">${c}${fmtNum(round2(l.qty * l.rate - (l.discount || 0)))}</div>
     </div>`).join('') : UI.emptyState('No items. Tap “+Add New Item”.', 'cart'));
+  const who = [st.custName, st.custPhone].filter(Boolean).join(' · ');
+  $root.find('.co-cust-t').text(who || 'Customer name & phone (optional)').toggleClass('set', !!who);
   $root.find('.v-sub').text(`${cur()}${fmtNum(t.subtotal)}`);
   $root.find('.v-total').text(`${cur()}${fmtNum(t.total)}`);
   $root.find('.v-items').text(st.lines.length);
@@ -99,6 +102,23 @@ async function editLine(i) {
     },
   });
   if (r) Cart.updateLine(i, r);
+}
+
+async function editCustomer() {
+  const st = Cart.get();
+  const r = await UI.formModal({
+    title: 'Customer (optional)', submitLabel: 'Save',
+    body: `<div class="row g-2">
+      <div class="col-12"><label class="form-label">Name</label><input name="name" class="form-control form-control-lg" maxlength="120" value="${esc(st.custName)}" placeholder="Walk-in Customer"></div>
+      <div class="col-12"><label class="form-label">Phone</label><input name="phone" type="tel" class="form-control form-control-lg" inputmode="tel" maxlength="30" value="${esc(st.custPhone)}" placeholder="03xx xxxxxxx"></div>
+      <div class="col-12 form-text">Shown on the receipt and used for WhatsApp / SMS. Leave empty to skip. For credit (Udhar) choose a customer instead.</div></div>`,
+    onSubmit: (v) => {
+      const phone = (v.phone || '').trim();
+      if (phone && phone.replace(/\D/g, '').length < 7) throw new AppError('Enter a valid phone number or leave it empty.');
+      return { custName: (v.name || '').trim(), custPhone: phone };
+    },
+  });
+  if (r) Cart.set(r);
 }
 
 async function editTax() {
@@ -250,6 +270,7 @@ async function receiptScreen(id, isNew) {
       ${s.business.phone ? `<div class="rc-phone">${esc(s.business.phone)}</div>` : ''}
       <div class="rc-title">Invoice</div>
       <div class="rc-meta"><b>Receipt# ${esc(doc.number)}</b><b>${esc(fmtDateTime(doc.createdAt))}</b></div>
+      ${doc.customerId || doc.customerPhone || (doc.customerName && doc.customerName !== 'Walk-in Customer') ? `<div class="rc-cust">Customer: ${esc(doc.customerName)}${doc.customerPhone ? ` · ${esc(doc.customerPhone)}` : ''}</div>` : ''}
       <div class="dash"></div>
       <div class="rc-grid head"><span>Name</span><span>Qty</span><span>Price</span><span class="r">Total</span></div>
       <div class="dash"></div>
@@ -289,7 +310,7 @@ async function receiptScreen(id, isNew) {
     else { try { await navigator.clipboard.writeText(text); UI.toast('Receipt copied'); } catch { UI.toast('Sharing is not supported on this device', 'warning'); } }
   });
   const phoneFor = async () => {
-    const known = doc.customerId ? Catalog.party('customers', doc.customerId)?.phone : '';
+    const known = doc.customerPhone || (doc.customerId ? Catalog.party('customers', doc.customerId)?.phone : '');
     if (known) return known;
     return UI.formModal({ title: 'Customer phone', submitLabel: 'Send', body: '<input name="phone" type="tel" class="form-control form-control-lg" inputmode="tel" placeholder="03xx xxxxxxx">',
       onSubmit: (v) => { if (String(v.phone || '').replace(/\D/g, '').length < 7) throw new AppError('Enter a valid phone number.'); return v.phone; } });
@@ -323,6 +344,7 @@ export default {
     renderCheckout();
     $root.on('change', '.co-date-in', function () { if (this.value) { Cart.set({ date: this.value }); $root.html(checkoutLayout()); renderCheckout(); } });
     $root.on('click keydown', '.co-line', function (e) { if (e.type === 'keydown' && e.key !== 'Enter') return; editLine(+this.dataset.i).then(renderCheckout); });
+    $root.on('click', '[data-act=cust]', () => editCustomer().then(renderCheckout));
     $root.on('click', '[data-act=tax]', () => editTax().then(renderCheckout));
     $root.on('click', '[data-act=discount]', () => editDiscount().then(renderCheckout));
     $root.on('click', '[data-act=later]', async () => {
