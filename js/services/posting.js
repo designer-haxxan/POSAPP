@@ -162,9 +162,14 @@ export async function saveSale(input) {
     const acc = await paymentAccount(t, input.paymentAccountId);
     const number = existing?.number || await nextNumber(t, 'sale');
     const now = nowISO();
+    // Customer's balance before this bill (debit - credit); a bill being edited keeps its original figure.
+    let prevBalance = 0;
+    if (customerId) {
+      prevBalance = existing?.prevBalance ?? round2((await t.getAllByIndex('entries', 'accountId', partyAccount('customers', customerId))).reduce((s, e) => s + e.debit - e.credit, 0));
+    }
     const doc = {
       id, number, date: input.date || existing?.date || today(), createdAt: existing?.createdAt || now, updatedAt: now,
-      customerId, customerName, customerPhone, itemCount: calc.lines.length, qtyTotal: calc.qtyTotal,
+      customerId, customerName, customerPhone, prevBalance, balanceAfter: round2(prevBalance + calc.total - paid), itemCount: calc.lines.length, qtyTotal: calc.qtyTotal,
       subtotal: calc.subtotal, discount: calc.discount, taxRate: calc.taxRate, tax: calc.tax, total: calc.total,
       tendered, paid, change: round2(Math.max(0, tendered - calc.total)), balance: round2(calc.total - paid),
       paymentAccountId: acc.id, paymentAccountName: acc.name,

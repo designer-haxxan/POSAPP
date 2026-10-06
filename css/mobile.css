@@ -252,3 +252,11 @@ button:disabled.btn-white, .co-pay button:disabled { opacity: .5; }
 .rc-sub > div { white-space: nowrap; }
 .rc-grid { padding: 12px 0; }
 .rc-grand { font-size: clamp(1.15rem, 5.4vw, 1.7rem); white-space: nowrap; }
+
+.qty-step { display: flex; align-items: center; gap: 2px; margin: 0 8px; flex-shrink: 0; }
+.qty-step button { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--p); background: none; color: var(--p); font-size: 1.1rem; line-height: 1; }
+.qty-step span { min-width: 28px; text-align: center; font-weight: 600; }
+.co-line .a { min-width: 78px; text-align: right; }
+.edit-amt { text-align: right; color: var(--bs-secondary-color); } .edit-amt b { color: var(--p); font-size: 1.2rem; }
+.row-kv.prev { color: #b45309; font-weight: 500; } .row-kv.strong { font-weight: 700; }
+.rc-acct { text-align: left; } .rc-kv.strong { font-weight: 700; font-size: 1.15rem; padding-top: 6px; border-top: 1px solid #ccc; margin-top: 4px; }

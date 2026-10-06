@@ -39,7 +39,7 @@ export async function buildReceipt(kind, doc) {
       const who = doc.customerId || doc.customerPhone || (doc.customerName && doc.customerName !== 'Walk-in Customer');
       m.invoice = {
         number: doc.number, when: fmtInvoiceDate(doc.createdAt, doc.date), qtyTotal: doc.qtyTotal, subtotal: doc.subtotal, discount: doc.discount, tax: doc.tax, taxRate: doc.taxRate,
-        total: doc.total, paid: doc.paid, balance: doc.balance, customer: who ? [doc.customerName, doc.customerPhone].filter(Boolean).join(' · ') : '',
+        total: doc.total, paid: doc.paid, balance: doc.balance, prev: doc.customerId && doc.prevBalance !== undefined && (doc.prevBalance !== 0 || doc.balance > 0) ? doc.prevBalance : null, after: doc.balanceAfter, customer: who ? [doc.customerName, doc.customerPhone].filter(Boolean).join(' · ') : '',
         mode: doc.paymentType === 'credit' ? 'Udhar' : (doc.paymentAccountId === 'cash' ? 'Cash' : doc.paymentAccountName) + (doc.paymentType === 'partial' ? ' + Udhar' : ''),
       };
     }
@@ -96,7 +96,13 @@ async function invoiceEscPos(m, width) {
   if (v.tax) p.lr(`Tax (${v.taxRate}%)`, `${cur}${fmtNum(v.tax)}`);
   p.hr().align('center').bold(true).size(true).wrap(`Grand Total ${cur}${fmtNum(v.total)}`, Math.floor(W / 2)).size(false).bold(false).align('left').hr();
   p.align('center').line(`Payment Mode: ${v.mode}`);
-  if (v.balance) { p.align('left').lr('Paid', `${cur}${fmtNum(v.paid)}`); p.bold(true).lr('Balance due', `${cur}${fmtNum(v.balance)}`).bold(false); }
+  if (v.prev !== null) {
+    p.hr().align('left');
+    p.lr(v.prev < 0 ? 'Previous Advance' : 'Previous Balance', `${cur}${fmtNum(Math.abs(v.prev))}`);
+    p.lr('This Bill', `${cur}${fmtNum(v.total)}`);
+    p.lr('Paid', `-${cur}${fmtNum(v.paid)}`);
+    p.bold(true).lr(v.after < 0 ? 'Advance Left' : 'Total Credit', `${cur}${fmtNum(Math.abs(v.after))}`).bold(false);
+  } else if (v.balance) { p.align('left').lr('Paid', `${cur}${fmtNum(v.paid)}`); p.bold(true).lr('Balance due', `${cur}${fmtNum(v.balance)}`).bold(false); }
   if (m.note) { p.align('left').wrap('Note: ' + m.note); }
   p.align('center').feed(1);
   if (m.footer) p.wrap(m.footer);
@@ -149,7 +155,8 @@ function invoiceHTML(m, width) {
     ${v.discount ? kv('Discount', `-${cur}${fmtNum(v.discount)}`) : ''}${v.tax ? kv(`Tax (${v.taxRate}%)`, `${cur}${fmtNum(v.tax)}`) : ''}</table>
     <hr><div class="c b big">Grand Total ${cur}${fmtNum(v.total)}</div><hr>
     <div class="c">Payment Mode: ${t(v.mode)}</div>
-    ${v.balance ? `<table>${kv('Paid', `${cur}${fmtNum(v.paid)}`)}${kv('Balance due', `${cur}${fmtNum(v.balance)}`, 'b')}</table>` : ''}
+    ${v.prev !== null ? `<hr><table>${kv(v.prev < 0 ? 'Previous Advance' : 'Previous Balance', `${cur}${fmtNum(Math.abs(v.prev))}`)}${kv('This Bill', `${cur}${fmtNum(v.total)}`)}${kv('Paid', `-${cur}${fmtNum(v.paid)}`)}${kv(v.after < 0 ? 'Advance Left' : 'Total Credit', `${cur}${fmtNum(Math.abs(v.after))}`, 'b')}</table>`
+      : v.balance ? `<table>${kv('Paid', `${cur}${fmtNum(v.paid)}`)}${kv('Balance due', `${cur}${fmtNum(v.balance)}`, 'b')}</table>` : ''}
     ${m.note ? `<div>Note: ${t(m.note)}</div>` : ''}
     <div class="c" style="margin-top:8px">${m.footer ? t(m.footer) : ''}</div><div class="c">Powered by ${esc(CONFIG.APP_NAME)}</div></div>`;
 }

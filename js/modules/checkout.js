@@ -14,7 +14,12 @@ import { fmtInvoiceDate, trim0, fmtTotalQty } from '../printer/receipt.js';
 import { partyPicker } from './parties.js';
 
 const $ = window.jQuery;
-let $root = null; let busy = false;
+let $root = null; let busy = false; let partyBal = 0;
+
+async function loadPartyBal() {
+  const id = Cart.get().partyId;
+  partyBal = id ? await Posting.accountBalance(Posting.partyAccount('customers', id)) : 0;
+}
 
 export const supportLink = () => `https://wa.me/${waNumber(CONFIG.SUPPORT_PHONE)}`;
 
@@ -48,6 +53,8 @@ function checkoutLayout() {
       <hr class="m-0">
       <div class="row-kv grand"><span>Grand Total</span><span class="v-total"></span></div>
       <div class="row-kv light"><span>Total Items</span><span class="v-items"></span></div>
+      <div class="row-kv prev d-none"><span>Previous Balance (credit)</span><span class="v-prev"></span></div>
+      <div class="row-kv prev strong d-none"><span>Total with previous</span><span class="v-withprev"></span></div>
     </div>
     <div class="co-actions">
       <button class="btn-white" data-act="later">Save For Later</button>
@@ -68,10 +75,15 @@ function renderCheckout() {
   $root.find('.co-lines').html(st.lines.length ? st.lines.map((l, i) => `
     <div class="co-line" data-i="${i}" role="button" tabindex="0">
       <div class="min-w-0"><div class="n text-truncate">${esc(l.name)}</div><div class="m">${c}${fmtNum(l.rate)} &nbsp;x${esc(fmtQty(l.qty))}${l.discount ? ` · disc ${fmtNum(l.discount)}` : ''}</div></div>
+      <div class="qty-step"><button data-dec aria-label="Less">−</button><span>${esc(fmtQty(l.qty))}</span><button data-inc aria-label="More">+</button></div>
       <div class="a">${c}${fmtNum(round2(l.qty * l.rate - (l.discount || 0)))}</div>
     </div>`).join('') : UI.emptyState('No items. Tap “+Add New Item”.', 'cart'));
-  const who = [st.custName, st.custPhone].filter(Boolean).join(' · ');
+  const who = st.partyId ? st.partyName : [st.custName, st.custPhone].filter(Boolean).join(' · ');
   $root.find('.co-cust-t').text(who || 'Customer name & phone (optional)').toggleClass('set', !!who);
+  const showPrev = !!st.partyId && partyBal !== 0;
+  $root.find('.prev').toggleClass('d-none', !showPrev);
+  $root.find('.v-prev').text(`${cur()}${fmtNum(Math.abs(partyBal))}${partyBal < 0 ? ' advance' : ''}`);
+  $root.find('.v-withprev').text(`${cur()}${fmtNum(t.total + partyBal)}`);
   $root.find('.v-sub').text(`${cur()}${fmtNum(t.subtotal)}`);
   $root.find('.v-total').text(`${cur()}${fmtNum(t.total)}`);
   $root.find('.v-items').text(st.lines.length);
@@ -93,8 +105,13 @@ async function editLine(i) {
       <div class="col-12"><label class="form-label">Name</label><input name="name" class="form-control form-control-lg" maxlength="120" value="${esc(l.name)}"></div>
       <div class="col-6"><label class="form-label">Price</label><input name="rate" class="form-control form-control-lg" inputmode="decimal" value="${l.rate}"></div>
       <div class="col-6"><label class="form-label">Quantity</label><input name="qty" class="form-control form-control-lg" inputmode="decimal" value="${l.qty}"></div>
+      <div class="col-12"><div class="edit-amt">Amount: <b class="ea"></b></div></div>
       <div class="col-12"><button type="button" class="btn btn-outline-danger w-100 btn-remove"><i class="bi bi-trash me-1"></i>Remove item</button></div></div>`,
-    onShown: ($m) => $m.find('.btn-remove').on('click', () => { Cart.removeLine(i); $m.find('[data-bs-dismiss=modal]').first().trigger('click'); }),
+    onShown: ($m) => {
+      const upd = () => $m.find('.ea').text(`${cur()}${fmtNum(round2(num($m.find('[name=rate]').val()) * round3(num($m.find('[name=qty]').val())) ))}`);
+      $m.on('input', '[name=rate], [name=qty]', upd); upd();
+      $m.find('.btn-remove').on('click', () => { Cart.removeLine(i); $m.find('[data-bs-dismiss=modal]').first().trigger('click'); });
+    },
     onSubmit: (v) => {
       const rate = round2(num(v.rate)); const qty = round3(num(v.qty));
       if (rate < 0) throw new AppError('Price cannot be negative.');
@@ -110,9 +127,20 @@ async function editCustomer() {
   const r = await UI.formModal({
     title: 'Customer (optional)', submitLabel: 'Save',
     body: `<div class="row g-2">
+      <div class="col-12"><button type="button" class="btn btn-outline-primary w-100 btn-existing"><i class="bi bi-people me-1"></i>${st.partyId ? `Customer: ${esc(st.partyName)} (change)` : 'Choose existing customer'}</button>
+        ${st.partyId ? '<button type="button" class="btn btn-link btn-sm text-danger px-0 btn-unlink">Remove selected customer</button>' : ''}</div>
       <div class="col-12"><label class="form-label">Name</label><input name="name" class="form-control form-control-lg" maxlength="120" value="${esc(st.custName)}" placeholder="Walk-in Customer"></div>
       <div class="col-12"><label class="form-label">Phone</label><input name="phone" type="tel" class="form-control form-control-lg" inputmode="tel" maxlength="30" value="${esc(st.custPhone)}" placeholder="03xx xxxxxxx"></div>
       <div class="col-12 form-text">Shown on the receipt and used for WhatsApp / SMS. Leave empty to skip. For credit (Udhar) choose a customer instead.</div></div>`,
+    onShown: ($m) => {
+      $m.find('.btn-unlink').on('click', () => { Cart.set({ partyId: null, partyName: '' }); $m.find('[data-bs-dismiss=modal]').first().trigger('click'); });
+      $m.find('.btn-existing').on('click', async () => {
+        $m.addClass('d-none'); $('.modal-backdrop').last().addClass('d-none');
+        const p = await partyPicker('customers', {});
+        $m.removeClass('d-none'); $('.modal-backdrop').first().removeClass('d-none');
+        if (p) { Cart.set({ partyId: p.id, partyName: p.name, custName: '', custPhone: '' }); $m.find('[data-bs-dismiss=modal]').first().trigger('click'); }
+      });
+    },
     onSubmit: (v) => {
       const phone = (v.phone || '').trim();
       if (phone && phone.replace(/\D/g, '').length < 7) throw new AppError('Enter a valid phone number or leave it empty.');
@@ -291,8 +319,12 @@ async function receiptScreen(id, isNew) {
       <div class="rc-grand">Grand Total ${c}${fmtNum(doc.total)}</div>
       <div class="dash"></div>
       <div class="rc-pay">Payment Mode: &nbsp;${esc(mode)}</div>
-      ${doc.balance ? `<div class="rc-kv"><span>Paid</span><span>${c}${fmtNum(doc.paid)}</span></div>` : ''}
-      ${doc.balance ? `<div class="rc-pay due">Balance due (${esc(doc.customerName)}): ${c}${fmtNum(doc.balance)}</div>` : ''}
+      ${doc.customerId && doc.prevBalance !== undefined && (doc.prevBalance !== 0 || doc.balance > 0) ? `<div class="dash"></div><div class="rc-acct">
+        <div class="rc-kv"><span>${doc.prevBalance < 0 ? 'Previous Advance' : 'Previous Balance'}</span><span>${c}${fmtNum(Math.abs(doc.prevBalance))}</span></div>
+        <div class="rc-kv"><span>This Bill</span><span>${c}${fmtNum(doc.total)}</span></div>
+        <div class="rc-kv"><span>Paid</span><span>-${c}${fmtNum(doc.paid)}</span></div>
+        <div class="rc-kv strong"><span>${doc.balanceAfter < 0 ? 'Advance Left' : 'Total Credit'}</span><span>${c}${fmtNum(Math.abs(doc.balanceAfter))}</span></div></div>`
+      : doc.balance ? `<div class="rc-kv"><span>Paid</span><span>${c}${fmtNum(doc.paid)}</span></div><div class="rc-pay due">Balance due (${esc(doc.customerName)}): ${c}${fmtNum(doc.balance)}</div>` : ''}
       <div class="rc-foot">${esc(s.business.footer || 'Thank You, Visit Again')}</div>
       <div class="rc-powered">Powered by ${esc(CONFIG.APP_NAME)}</div>
     </div>
@@ -339,7 +371,7 @@ function shareText(doc, list) {
     s.business.name, s.business.phone, `Invoice ${doc.number} · ${fmtDate(doc.date)}`, '',
     ...list.map((i) => `${i.name}  ${fmtQty(i.qty)} x ${fmtNum(i.rate)} = ${fmtNum(i.amount)}`), '',
     doc.discount ? `Discount: -${c} ${fmtNum(doc.discount)}` : '', doc.tax ? `Tax: ${c} ${fmtNum(doc.tax)}` : '',
-    `Total: ${c} ${fmtNum(doc.total)}`, doc.balance ? `Balance due: ${c} ${fmtNum(doc.balance)}` : '', '', s.business.footer || 'Thank you, visit again',
+    `Total: ${c} ${fmtNum(doc.total)}`, doc.customerId && doc.prevBalance !== undefined && (doc.prevBalance !== 0 || doc.balance > 0) ? `Previous balance: ${c} ${fmtNum(doc.prevBalance)}\nPaid: ${c} ${fmtNum(doc.paid)}\nTotal credit: ${c} ${fmtNum(doc.balanceAfter)}` : (doc.balance ? `Balance due: ${c} ${fmtNum(doc.balance)}` : ''), '', s.business.footer || 'Thank you, visit again',
   ].filter((l, i, a) => l !== '' || (a[i - 1] !== '' && i > 0)).join('\n');
 }
 
@@ -350,10 +382,18 @@ export default {
     if (route === 'receipt') return receiptScreen(params[0], params[1] === 'new');
     if (Cart.isEmpty()) { location.hash = '#/sell'; return; }
     $root.html(checkoutLayout());
+    await loadPartyBal();
     renderCheckout();
     $root.on('change', '.co-date-in', function () { if (this.value) { Cart.set({ date: this.value }); $root.html(checkoutLayout()); renderCheckout(); } });
+    $root.on('click', '.co-line [data-inc], .co-line [data-dec]', function (e) {
+      e.stopPropagation();
+      const i = +$(this).closest('.co-line').data('i'); const l = Cart.get().lines[i];
+      const q = round3(l.qty + (this.hasAttribute('data-inc') ? 1 : -1));
+      if (q <= 0) Cart.removeLine(i); else Cart.updateLine(i, { qty: q });
+      renderCheckout();
+    });
     $root.on('click keydown', '.co-line', function (e) { if (e.type === 'keydown' && e.key !== 'Enter') return; editLine(+this.dataset.i).then(renderCheckout); });
-    $root.on('click', '[data-act=cust]', () => editCustomer().then(renderCheckout));
+    $root.on('click', '[data-act=cust]', () => editCustomer().then(loadPartyBal).then(renderCheckout));
     $root.on('click', '[data-act=tax]', () => editTax().then(renderCheckout));
     $root.on('click', '[data-act=discount]', () => editDiscount().then(renderCheckout));
     $root.on('click', '[data-act=later]', async () => {

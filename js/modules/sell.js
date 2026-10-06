@@ -58,9 +58,9 @@ export function evaluate(s) {
   return i === t.length && Number.isFinite(v) ? round2(v) : null;
 }
 
-// "10@120" → quantity 10 at price 120. Anything else is a single item at that amount.
+// "10@120" or "10×120" → quantity 10 at price 120. Anything else is a single item at that amount.
 function parseItem(s) {
-  const m = /^(\d*\.?\d+)@(\d*\.?\d+)$/.exec(s);
+  const m = /^(\d*\.?\d+)[@×](\d*\.?\d+)$/.exec(s);
   if (m && Number(m[1]) > 0 && Number(m[2]) > 0) return { qty: Number(m[1]), rate: Number(m[2]) };
   const v = evaluate(s);
   return v !== null && v > 0 ? { rate: v, qty: 1 } : null;
@@ -105,7 +105,7 @@ function pending() { return expr ? evaluate(expr) : null; }
 function previewText() {
   if (!expr) return '';
   const it = parseItem(expr);
-  const shown = it && expr.includes('@') ? `${fmtQty(it.qty)}×${fmtNum(it.rate).replace(/\.00$/, '')}` : (pending() !== null && /[+−×÷%]/.test(expr) ? fmtNum(pending()).replace(/\.00$/, '') : expr.replace(/@/g, '×'));
+  const shown = it && /[@×]/.test(expr) ? `${fmtQty(it.qty)}×${fmtNum(it.rate).replace(/\.00$/, '')}` : (pending() !== null && /[+−×÷%]/.test(expr) ? fmtNum(pending()).replace(/\.00$/, '') : expr.replace(/@/g, '×'));
   return `Item ${Cart.count() + 1} : ${cur()}${shown}`;
 }
 
